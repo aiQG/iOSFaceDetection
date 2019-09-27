@@ -21,13 +21,8 @@ class ViewController: UIViewController {
 	var boxY: CGFloat!
 	var boxW: CGFloat!
 	var boxH: CGFloat!
+	var imageTemp: UIImage!
 	
-	/*
-	override func viewWillAppear(_ animated: Bool) {
-		  //startLiveVideo()
-	  }
-	*/
-
 	override func viewDidLoad() {
 		super.viewDidLoad()
 		// Do any additional setup after loading the view.
@@ -53,19 +48,13 @@ class ViewController: UIViewController {
 		let imageLayer = AVCaptureVideoPreviewLayer(session: mainSession)
 		imageLayer.frame = mainImageView.bounds
 		mainImageView.layer.addSublayer(imageLayer)
-		
 		mainSession.startRunning()
 	}
-	/*
-	override func viewDidLayoutSubviews() {
-        mainImageView.layer.sublayers?[0].frame = mainImageView.bounds
-    }
-	*/
+
 	func startDetection() {
-		//
-		let faceRequest = VNDetectFaceRectanglesRequest(completionHandler: self.detectFaceHandler)//VNDetectTextRectanglesRequest(completionHandler: self.detectTextHandler)
 		
-		//faceRequest.reportCharacterBoxes = true
+		let faceRequest = VNDetectFaceRectanglesRequest(completionHandler: self.detectFaceHandler)
+		
 		self.requests = [faceRequest]
 	}
 	
@@ -74,30 +63,40 @@ class ViewController: UIViewController {
 			  let results = faceDetectionRequest.results as? [VNFaceObservation] else {
 						   return
 				   }
-		if results.count > 0 {
-			DispatchQueue.main.sync() {
+		DispatchQueue.main.sync() {
+			if results.count > 0 {
+				
 				self.mainImageView.layer.sublayers?.removeSubrange(1...)
 				self.getFaceBoundingBox(aResult: results[0])//只选定第一个结果
+				
+			}
+			else if(boxH != nil || boxX != nil || boxY != nil || boxW != nil) {//无结果时初始化框框
+				boxH = nil
+				boxX = nil
+				boxY = nil
+				boxW = nil
+				self.mainImageView.layer.sublayers?.removeSubrange(1...)
 			}
 		}
-		
 	}
 	
 	func getFaceBoundingBox(aResult: VNFaceObservation) {
 		let box = aResult.boundingBox
         let outline = CALayer()
-		boxX = box.origin.x * mainImageView.frame.size.width
-		boxY = box.origin.y * mainImageView.frame.size.height
-		boxW = box.width * mainImageView.frame.size.width
-		boxH = box.height * mainImageView.frame.size.height
-		let newR = CGRect(x: boxX,
-		y: boxY,
-		width: boxW,
-		height: boxH)
+		boxX = box.origin.x
+		boxY = box.origin.y
+		boxW = box.width
+		boxH = box.height
+		let newR = CGRect(x: boxX * mainImageView.frame.size.width,
+						  y: boxY * mainImageView.frame.size.height,
+						  width: boxW * mainImageView.frame.size.width,
+						  height: boxH * mainImageView.frame.size.height)
 		outline.frame = newR
-		
         outline.borderWidth = 2.0
-        outline.borderColor = UIColor.blue.cgColor
+		outline.borderColor = UIColor.red.cgColor
+
+		
+		//mainImageView.contentMode = UIView.ContentMode.topLeft
         mainImageView.layer.addSublayer(outline)
 		
     }
@@ -108,12 +107,12 @@ class ViewController: UIViewController {
 extension ViewController: AVCaptureVideoDataOutputSampleBufferDelegate{
 	
 	func captureOutput(_ output: AVCaptureOutput, didDrop sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-		print("give up \(temp)") //丢弃缓冲数据
-		temp = 1 + temp
+		//print("give up \(temp)") //丢弃缓冲数据
+		//temp = 1 + temp
 	}
 	//sampleBuffer是得到的图片
 	func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-		print("get it")
+		//print("get it")
 		guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
 			return
 		}
@@ -132,25 +131,32 @@ extension ViewController: AVCaptureVideoDataOutputSampleBufferDelegate{
 			print(error)
 		}
 		
-		//showFace
-		let imageBuffer: CVPixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)!
-		let ciImage: CIImage = CIImage(cvPixelBuffer: imageBuffer)
-		let image: UIImage = self.convert(cmage: ciImage)
 		
-		if(boxH == nil || boxX==nil || boxY==nil || boxW==nil){
-			return
-		}
+	
 		
 		
-		//需要调整图片方位
 		DispatchQueue.main.sync {
-			let newRect = CGRect(x: boxX, y: boxY, width: boxW, height: boxH)
-			
+			//showFace
+			let imageBuffer: CVPixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)!
+			let ciImage: CIImage = CIImage(cvPixelBuffer: imageBuffer)
+			let image: UIImage = self.convert(cmage: ciImage)
+			if(boxH == nil || boxX==nil || boxY==nil || boxW==nil){
+				showFace.image = nil
+				return
+			}
 			let cgImage = image.cgImage!
-			let croppedCGImage = cgImage.cropping(to: newRect)
-			let faceUIImage = UIImage(cgImage: croppedCGImage!, scale: 1, orientation: .leftMirrored)
+			let aCGRect = CGRect(x: boxY * image.size.height,
+								 y: boxX * image.size.width,
+								 width: boxW * image.size.width,
+								 height: boxH * image.size.height)
+			guard let cgImageCro: CGImage = cgImage.cropping(to: aCGRect) else{
+				return
+			}
+			let faceUIImageOri = UIImage(cgImage: cgImageCro, scale: 0.5, orientation: .leftMirrored)
+			//get face
 			
-			//showFace.image = faceUIImage
+			showFace.image = faceUIImageOri
+			 
 		}
 		
 		
